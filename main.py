@@ -138,56 +138,114 @@ async def upload(file: UploadFile = File(...)):
     return {"doc_id": doc_id, "name": file.filename, "chunks": len(new_meta)}
 
 
+SYSTEM_PROMPT = (
+    "You are Clause, a friendly assistant that helps people understand their contracts.\n\n"
+    "Decide how to respond based on what the user says:\n"
+    "1. If they are greeting you, making small talk, or thanking you — reply naturally and "
+    "briefly, like a real person would, in one short sentence. Do NOT tack on a phrase like "
+    "'let me know if you have questions about your contracts' — it's repetitive and pushy. Only "
+    "mention contracts if it's the very first message or they explicitly ask what you do. Vary "
+    "your wording and never repeat the same closing line. Do NOT use the document context. Set "
+    "mode to \"chat\".\n"
+    "2. If they ask which documents/files/contracts you have or can see, answer from the "
+    "'Documents currently loaded' list given to you — just name the files. Set mode to "
+    "\"chat\".\n"
+    "3. If they ask a question about the content of their documents — answer using ONLY the "
+    "provided context. Quote and explain the relevant part. If the answer is genuinely not in "
+    "the context, say you couldn't find it. Set mode to \"document\".\n\n"
+    "Always respond as JSON: {\"mode\": \"chat\" | \"document\", \"answer\": \"<your reply>\"}."
+)
+
+
 @app.post("/chat")
-async def chat(question: str = Form(...), doc_id: str = Form("")):
-    if index.ntotal == 0:
-        raise HTTPException(400, "No documents uploaded yet.")
+async def chat(question: str = Form(...), doc_id: str = Form(""), history: str = Form("")):
+    q = question.strip()
+    if not q:
+        return {"answer": "Ask me something about your contracts.", "citations": []}
 
-    qvec = embed([question])
-    # over-fetch so we can filter by document if requested
-    D, I = index.search(qvec, min(30, index.ntotal))
+    # Recent conversation, so follow-ups like "what about termination?" make sense.
+    try:
+        prior = json.loads(history) if history else []
+        prior = [m for m in prior if m.get("role") in ("user", "assistant")][-8:]
+    except json.JSONDecodeError:
+        prior = []
 
+    # Retrieve context only if there are documents.
     hits = []
-    for score, idx in zip(D[0], I[0]):
-        if idx < 0:
-            continue
-        meta = STORE["chunks"][idx]
-        if doc_id and meta["doc_id"] != doc_id:
-            continue
-        hits.append(meta)
-        if len(hits) >= TOP_K:
-            break
+    if index.ntotal > 0:
+        qvec = embed([q])
+        D, I = index.search(qvec, min(30, index.ntotal))
+        for idx in I[0]:
+            if idx < 0:
+                continue
+            meta = STORE["chunks"][idx]
+            if doc_id and meta["doc_id"] != doc_id:
+                continue
+            hits.append(meta)
+            if len(hits) >= TOP_K:
+                break
 
-    if not hits:
-        return {"answer": "I couldn't find anything relevant in the selected document(s).", "citations": []}
+    context = "\n\n".join(f"[{h['doc_name']} {h['page']}]\n{h['text']}" for h in hits) \
+        or "(nothing retrieved)"
+    loaded = ", ".join(STORE["docs"].values()) or "(none yet)"
+    user = (f"Documents currently loaded: {loaded}\n\n"
+            f"Relevant excerpts for this question:\n{context}\n\nUser message: {q}")
 
-    context = "\n\n".join(
-        f"[{h['doc_name']} {h['page']}]\n{h['text']}" for h in hits
-    )
-    system = (
-        "You are a contract analysis assistant. Answer ONLY from the provided context. "
-        "If the answer isn't in the context, say you couldn't find it. "
-        "Always cite the source as [document name, page] inline where relevant."
-    )
-    user = f"Context:\n{context}\n\nQuestion: {question}"
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages += prior
+    messages.append({"role": "user", "content": user})
 
     resp = client.chat.completions.create(
         model=CHAT_MODEL,
-        messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": user}],
-        temperature=0.1,
+        messages=messages,
+        temperature=0.2,
+        response_format={"type": "json_object"},
     )
-    answer = resp.choices[0].message.content
+    try:
+        parsed = json.loads(resp.choices[0].message.content)
+        answer = parsed.get("answer", "").strip()
+        mode = parsed.get("mode", "chat")
+    except (json.JSONDecodeError, AttributeError):
+        answer = resp.choices[0].message.content
+        mode = "document"
 
-    citations = [{"doc": h["doc_name"], "page": h["page"]} for h in hits]
-    # de-dup citations, keep order
+    # Only show citations for real document answers that actually found something.
+    low = answer.lower()
+    failed = any(p in low for p in ["couldn't find", "could not find", "not in the context",
+                                    "no relevant", "isn't in", "is not in", "don't have"])
+    if mode != "document" or not hits or failed:
+        return {"answer": answer, "citations": []}
+
     seen, uniq = set(), []
-    for c in citations:
-        key = (c["doc"], c["page"])
+    for h in hits:
+        key = (h["doc_name"], h["page"])
         if key not in seen:
             seen.add(key)
-            uniq.append(c)
+            uniq.append({"doc": h["doc_name"], "page": h["page"]})
     return {"answer": answer, "citations": uniq}
+
+
+@app.post("/delete")
+def delete_doc(doc_id: str = Form(...)):
+    global index
+    if doc_id not in STORE["docs"]:
+        raise HTTPException(404, "Document not found.")
+
+    keep_mask = [c["doc_id"] != doc_id for c in STORE["chunks"]]
+
+    # Rebuild the index from the chunks we're keeping. We reconstruct the existing
+    # vectors straight from FAISS, so there's no need to re-embed (no API cost).
+    new_index = faiss.IndexFlatIP(EMBED_DIM)
+    if index.ntotal > 0 and any(keep_mask):
+        all_vecs = index.reconstruct_n(0, index.ntotal)
+        kept = all_vecs[np.array(keep_mask)]
+        new_index.add(kept.astype("float32"))
+    index = new_index
+
+    STORE["chunks"] = [c for c, k in zip(STORE["chunks"], keep_mask) if k]
+    del STORE["docs"][doc_id]
+    persist()
+    return {"ok": True}
 
 
 @app.post("/reset")

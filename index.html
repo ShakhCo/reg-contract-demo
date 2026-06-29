@@ -3,148 +3,310 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Contract RAG — Ask your documents</title>
+<title>Clause — Ask your contracts in plain English</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg:#0d1117; --panel:#161b22; --border:#262d38; --text:#e6edf3;
-    --muted:#8b949e; --accent:#2f81f7; --accent2:#1f6feb; --user:#1f6feb;
+  :root{
+    --paper:#FAF9F6; --card:#FFFFFF; --ink:#17181C; --muted:#6E727C;
+    --line:#E9E7E0; --line-soft:#F0EEE8;
+    --accent:#3A35D1; --accent-ink:#2A26A8; --accent-soft:#EEEDFB;
+    --mark:#F6C453; --mark-soft:#FCF3D8;
+    --serif:"Newsreader",Georgia,serif;
+    --sans:"Inter",-apple-system,Segoe UI,Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --r:14px;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-         background:var(--bg); color:var(--text); height:100vh; display:flex; }
-  /* sidebar */
-  .sidebar { width:320px; background:var(--panel); border-right:1px solid var(--border);
-             display:flex; flex-direction:column; padding:20px; }
-  .brand { font-size:18px; font-weight:700; margin-bottom:4px; }
-  .brand span { color:var(--accent); }
-  .sub { color:var(--muted); font-size:12px; margin-bottom:20px; }
-  .label { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:18px 0 8px; }
-  .upload { border:1.5px dashed var(--border); border-radius:10px; padding:18px; text-align:center;
-            cursor:pointer; color:var(--muted); font-size:13px; transition:.15s; }
-  .upload:hover { border-color:var(--accent); color:var(--text); }
-  .doc { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px;
-         font-size:13px; color:var(--text); }
-  .doc:hover { background:#1c2230; }
-  .doclist { overflow-y:auto; flex:1; }
-  select { width:100%; background:#0d1117; color:var(--text); border:1px solid var(--border);
-           border-radius:8px; padding:9px; font-size:13px; }
-  /* chat */
-  .main { flex:1; display:flex; flex-direction:column; }
-  .messages { flex:1; overflow-y:auto; padding:28px; display:flex; flex-direction:column; gap:18px; }
-  .msg { max-width:760px; padding:14px 16px; border-radius:12px; line-height:1.5; font-size:14.5px; white-space:pre-wrap; }
-  .msg.user { align-self:flex-end; background:var(--user); }
-  .msg.bot  { align-self:flex-start; background:var(--panel); border:1px solid var(--border); }
-  .cites { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
-  .cite { font-size:11px; background:#0d1117; border:1px solid var(--border); color:var(--accent);
-          padding:3px 8px; border-radius:20px; }
-  .empty { color:var(--muted); text-align:center; margin:auto; max-width:420px; font-size:14px; line-height:1.6; }
-  .empty h2 { color:var(--text); font-weight:600; }
-  .ex { display:block; background:var(--panel); border:1px solid var(--border); border-radius:8px;
-        padding:9px 12px; margin:8px 0; cursor:pointer; text-align:left; color:var(--text); font-size:13px; }
-  .ex:hover { border-color:var(--accent); }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:var(--sans);background:var(--paper);color:var(--ink);
+       display:flex;flex-direction:column;font-size:15px;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+  /* ---------- shell ---------- */
+  .shell{flex:1;display:flex;min-height:0}
+
+  /* ---------- sidebar ---------- */
+  .side{width:330px;flex-shrink:0;background:var(--card);border-right:1px solid var(--line);
+        display:flex;flex-direction:column;padding:24px 22px}
+  .brand{display:flex;align-items:baseline;gap:8px;margin-bottom:14px}
+  .mark{font-family:var(--serif);font-size:27px;font-weight:600;color:var(--accent);line-height:1}
+  .wordmark{font-family:var(--serif);font-size:24px;font-weight:600;letter-spacing:-.01em}
+  .badge{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);
+         border:1px solid var(--line);background:var(--paper);padding:6px 11px;border-radius:30px;align-self:flex-start}
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:#2E9E6B;box-shadow:0 0 0 3px #2e9e6b22}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+           color:var(--muted);margin:0 0 11px}
+  .eyebrow.mt{margin-top:26px}
+
+  .drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:24px 16px;text-align:center;
+        cursor:pointer;color:var(--muted);font-size:13.5px;line-height:1.5;transition:.18s;background:var(--paper)}
+  .drop:hover{border-color:var(--accent);color:var(--ink);background:var(--accent-soft)}
+  .drop .ic{font-size:22px;display:block;margin-bottom:6px;color:var(--accent)}
+  .drop b{color:var(--ink);font-weight:600}
+
+  select{width:100%;font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--card);
+         border:1px solid var(--line);border-radius:10px;padding:11px 12px;cursor:pointer;
+         appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M3 4.5L6 7.5L9 4.5' stroke='%236E727C' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+         background-repeat:no-repeat;background-position:right 12px center}
+  select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+  .doclist{flex:1;overflow-y:auto;margin-top:2px}
+  .doc{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;font-size:13.5px;
+       max-height:46px;overflow:hidden;
+       transition:background .15s,opacity .22s ease,transform .22s ease,max-height .22s ease,padding .22s ease}
+  .doc:hover{background:var(--paper)}
+  .doc .fi{font-family:var(--mono);font-size:10px;color:var(--accent);border:1px solid var(--line);
+           border-radius:5px;padding:2px 5px;background:var(--accent-soft);flex-shrink:0}
+  .doc .dname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .doc .del{flex-shrink:0;border:none;background:transparent;color:var(--muted);cursor:pointer;
+            width:26px;height:26px;border-radius:7px;font-size:17px;line-height:1;display:grid;place-items:center;
+            opacity:0;transform:scale(.7);transition:opacity .15s,transform .15s,background .15s,color .15s}
+  .doc:hover .del{opacity:1;transform:scale(1)}
+  .doc .del:hover{background:#FBE7E4;color:#D4493B}
+  .doc.removing{opacity:0;transform:translateX(14px);max-height:0;padding-top:0;padding-bottom:0}
+  .doc.none{color:var(--muted);font-size:13px}
+
+  /* ---------- mobile bar + drawer overlay (hidden on desktop) ---------- */
+  .mobilebar{display:none;align-items:center;gap:12px;padding:12px 16px;
+             border-bottom:1px solid var(--line);background:var(--card)}
+  .menu{border:1px solid var(--line);background:var(--card);border-radius:9px;width:40px;height:40px;
+        display:grid;place-items:center;cursor:pointer;color:var(--ink);font-size:18px}
+  .mobilebar .mtitle{font-family:var(--serif);font-size:18px;font-weight:600}
+  .overlay{display:none;position:fixed;inset:0;background:#1116;z-index:30;opacity:0;transition:opacity .25s}
+  .overlay.show{opacity:1}
+
+  /* ---------- chat ---------- */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .stream{flex:1;overflow-y:auto;padding:34px 32px;display:flex;flex-direction:column;gap:20px}
+
+  /* empty / hero */
+  .hero{margin:auto;max-width:560px;text-align:center;padding:20px}
+  .hero h1{font-family:var(--serif);font-weight:500;font-size:38px;line-height:1.12;margin:0 0 14px;letter-spacing:-.015em}
+  .hero h1 em{font-style:normal;background:linear-gradient(transparent 62%,var(--mark) 62%);padding:0 2px}
+  .hero p{color:var(--muted);font-size:16px;line-height:1.6;margin:0 auto 26px;max-width:430px}
+  .examples{display:flex;flex-direction:column;gap:10px;text-align:left}
+  .ex{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+      border-radius:12px;padding:13px 15px;cursor:pointer;font-size:14.5px;transition:.16s}
+  .ex:hover{border-color:var(--accent);box-shadow:0 4px 14px #3a35d111;transform:translateY(-1px)}
+  .ex .q{font-family:var(--mono);font-size:11px;color:var(--accent);flex-shrink:0}
+
+  /* messages */
+  .msg{max-width:760px;line-height:1.6;font-size:15px;animation:rise .3s ease}
+  .msg.user{align-self:flex-end;background:var(--accent);color:#fff;padding:12px 17px;
+            border-radius:14px 14px 4px 14px;min-width:54px;text-align:left}
+  .msg.bot{align-self:flex-start;background:var(--card);border:1px solid var(--line);
+           border-left:3px solid var(--accent);padding:16px 18px;border-radius:4px 14px 14px 14px;
+           box-shadow:0 1px 2px #0000000a}
+  .msg.bot .ans{white-space:pre-wrap}
+  .cites{margin-top:13px;padding-top:12px;border-top:1px solid var(--line-soft);display:flex;flex-wrap:wrap;gap:7px}
+  .cites .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+              color:var(--muted);align-self:center;margin-right:2px}
+  .cite{font-family:var(--mono);font-size:11.5px;color:var(--accent-ink);background:var(--mark-soft);
+        border:1px solid #E6D9A8;padding:4px 9px;border-radius:6px}
+  .cite b{color:var(--accent);font-weight:500}
+
+  /* typing */
+  .typing{display:flex;gap:4px;padding:4px 0}
+  .typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);opacity:.4;animation:blink 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s} .typing i:nth-child(3){animation-delay:.4s}
+
   /* composer */
-  .composer { border-top:1px solid var(--border); padding:16px 28px; display:flex; gap:10px; }
-  .composer input { flex:1; background:var(--panel); border:1px solid var(--border); color:var(--text);
-                    border-radius:10px; padding:13px 15px; font-size:14.5px; }
-  .composer button { background:var(--accent2); color:#fff; border:none; border-radius:10px;
-                     padding:0 22px; font-size:14px; font-weight:600; cursor:pointer; }
-  .composer button:disabled { opacity:.5; cursor:default; }
-  .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--muted);
-         animation:b 1s infinite; margin:0 1px; }
-  .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
-  @keyframes b { 0%,100%{opacity:.3} 50%{opacity:1} }
+  .composer{border-top:1px solid var(--line);background:var(--card);padding:16px 32px}
+  .field{display:flex;gap:11px;max-width:900px;margin:0 auto}
+  .field input{flex:1;min-width:0;font-family:var(--sans);font-size:15px;color:var(--ink);background:var(--paper);
+               border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:var(--card)}
+  .field button{min-width:84px;display:inline-grid;place-items:center}
+  .spin{width:16px;height:16px;border:2px solid #ffffff66;border-top-color:#fff;border-radius:50%;
+        display:inline-block;animation:spin .6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .field button{font-family:var(--sans);font-weight:600;font-size:14.5px;color:#fff;background:var(--accent);
+                border:none;border-radius:12px;padding:0 26px;cursor:pointer;transition:.16s}
+  .field button:hover{background:var(--accent-ink)}
+  .field button:disabled{opacity:.45;cursor:default}
+  .hint{max-width:900px;margin:9px auto 0;font-size:11.5px;color:var(--muted);text-align:center}
+
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  @media (max-width:820px){
+    html,body{height:100dvh}
+    .mobilebar{display:flex}
+    .overlay{display:block;pointer-events:none}
+    .overlay.show{pointer-events:auto}
+
+    /* sidebar becomes an off-canvas drawer */
+    .side{position:fixed;top:0;left:0;height:100dvh;width:300px;z-index:40;
+          transform:translateX(-100%);transition:transform .26s ease;
+          box-shadow:0 0 60px #0000001f;overflow-y:auto}
+    .side.open{transform:none}
+    .doclist{flex:none}
+
+    /* delete is always visible on touch (no hover) */
+    .doc .del{opacity:1;transform:none}
+
+    .stream{padding:22px 16px;gap:16px}
+    .msg{max-width:100%}
+    .hero{padding:8px} .hero h1{font-size:27px} .hero p{font-size:15px}
+    .composer{padding:12px 14px env(safe-area-inset-bottom)}
+    .field input{padding:13px 14px;font-size:16px} /* 16px avoids iOS zoom-on-focus */
+    .field button{padding:0 20px}
+    .hint{display:none}
+  }
+  @media (max-width:380px){
+    .hero h1{font-size:24px}
+    .field button{padding:0 16px}
+  }
 </style>
 </head>
 <body>
-  <aside class="sidebar">
-    <div class="brand">Contract<span>RAG</span></div>
-    <div class="sub">Local-first contract Q&A · cited answers</div>
+  <div class="overlay" id="overlay"></div>
+  <div class="shell">
+    <aside class="side" id="side">
+      <p class="eyebrow">Add a contract</p>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".pdf,.docx,.txt" hidden />
+        <span class="ic">＋</span>
+        <b>Drop a file or click to upload</b><br>PDF, DOCX or TXT
+      </label>
 
-    <div class="label">Upload contract</div>
-    <label class="upload" id="drop">
-      <input type="file" id="file" accept=".pdf,.docx,.txt" hidden />
-      ＋ Drop or click to add a PDF / DOCX / TXT
-    </label>
+      <p class="eyebrow mt">Search in</p>
+      <select id="scope"><option value="">All contracts</option></select>
 
-    <div class="label">Search scope</div>
-    <select id="scope"><option value="">All documents</option></select>
+      <p class="eyebrow mt">Your contracts</p>
+      <div class="doclist" id="docs"></div>
+    </aside>
 
-    <div class="label">Documents</div>
-    <div class="doclist" id="docs"></div>
-  </aside>
-
-  <main class="main">
-    <div class="messages" id="messages">
-      <div class="empty" id="empty">
-        <h2>Ask your contracts anything</h2>
-        Upload an agreement on the left, then try:
-        <span class="ex">What is the termination clause in this agreement?</span>
-        <span class="ex">Which contracts include a non-compete clause?</span>
-        <span class="ex">What are the payment terms?</span>
+    <main class="main">
+      <header class="mobilebar">
+        <button class="menu" id="menuBtn" aria-label="Open documents">☰</button>
+        <span class="mtitle">Contract Q&A</span>
+      </header>
+      <div class="stream" id="stream">
+        <div class="hero" id="hero">
+          <h1>What does your contract <em>actually</em> say?</h1>
+          <p>Upload an agreement and ask in plain English. Every answer points back to the exact clause it came from.</p>
+          <div class="examples">
+            <div class="ex"><span class="q">Q1</span>What is the termination clause in this agreement?</div>
+            <div class="ex"><span class="q">Q2</span>Which contracts include a non-compete clause?</div>
+            <div class="ex"><span class="q">Q3</span>What are the payment terms and late fees?</div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="composer">
-      <input id="q" placeholder="Ask a question about your contracts…" />
-      <button id="send">Ask</button>
-    </div>
-  </main>
+
+      <div class="composer">
+        <div class="field">
+          <input id="q" placeholder="Ask a question about your contracts…" autocomplete="off" />
+          <button id="send">Ask</button>
+        </div>
+        <div class="hint">Answers are generated from your uploaded documents and cite their source.</div>
+      </div>
+    </main>
+  </div>
 
 <script>
 const $ = s => document.querySelector(s);
-const msgs = $("#messages"), scope = $("#scope"), docsEl = $("#docs");
+const stream = $("#stream"), scope = $("#scope"), docsEl = $("#docs");
+const side = $("#side"), overlay = $("#overlay");
+const history = [];  // running conversation so the assistant follows the thread
+let busy = false;    // lock: no new message until the current one is answered
+
+// ---- mobile drawer ----
+function openDrawer(){ side.classList.add("open"); overlay.classList.add("show"); }
+function closeDrawer(){ side.classList.remove("open"); overlay.classList.remove("show"); }
+$("#menuBtn").addEventListener("click", openDrawer);
+overlay.addEventListener("click", closeDrawer);
 
 async function loadDocs(){
   const docs = await (await fetch("/documents")).json();
-  scope.innerHTML = '<option value="">All documents</option>' +
+  scope.innerHTML = '<option value="">All contracts</option>' +
     docs.map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
   docsEl.innerHTML = docs.length
-    ? docs.map(d=>`<div class="doc">📄 ${d.name}</div>`).join("")
-    : '<div class="doc" style="color:var(--muted)">No documents yet</div>';
+    ? docs.map(d=>{const ext=(d.name.split('.').pop()||'').toUpperCase();
+        return `<div class="doc" data-id="${d.id}">
+                  <span class="fi">${ext}</span>
+                  <span class="dname">${d.name}</span>
+                  <button class="del" data-id="${d.id}" title="Remove this contract" aria-label="Remove">×</button>
+                </div>`;}).join("")
+    : '<div class="doc none">No contracts yet — upload one above.</div>';
 }
 
+// delegated: animate the row out, then delete on the server and refresh
+docsEl.addEventListener("click", async e=>{
+  const btn = e.target.closest(".del"); if(!btn) return;
+  const row = btn.closest(".doc");
+  row.classList.add("removing");
+  const fd = new FormData(); fd.append("doc_id", btn.dataset.id);
+  try{ await fetch("/delete", {method:"POST", body:fd}); }catch(_){}
+  setTimeout(loadDocs, 230);
+});
+
 const fileInput = $("#file"), drop = $("#drop");
-drop.addEventListener("click", ()=>fileInput.click());
 fileInput.addEventListener("change", async () => {
   if(!fileInput.files.length) return;
-  drop.textContent = "Uploading & indexing…";
+  drop.innerHTML = '<span class="ic">⏳</span><b>Reading & indexing…</b>';
   const fd = new FormData(); fd.append("file", fileInput.files[0]);
   const r = await fetch("/upload", {method:"POST", body:fd});
-  drop.textContent = r.ok ? "✓ Added — add another?" : "Upload failed, try again";
-  setTimeout(()=>drop.textContent="＋ Drop or click to add a PDF / DOCX / TXT", 2500);
-  loadDocs();
+  drop.innerHTML = r.ok
+    ? '<span class="ic">✓</span><b>Added.</b><br>Upload another?'
+    : '<span class="ic">⚠</span><b>Upload failed.</b><br>Try again';
+  setTimeout(()=>{drop.innerHTML='<span class="ic">＋</span><b>Drop a file or click to upload</b><br>PDF, DOCX or TXT';}, 2600);
+  fileInput.value=""; loadDocs();
+  if(r.ok && window.matchMedia("(max-width:820px)").matches) setTimeout(closeDrawer, 1100);
 });
 
 function bubble(text, who){
-  $("#empty")?.remove();
+  $("#hero")?.remove();
   const d = document.createElement("div");
-  d.className = "msg "+who; d.textContent = text;
-  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  d.className = "msg "+who;
+  if(who==="user"){ d.textContent = text; }
+  else { d.innerHTML = '<div class="ans"></div>'; d.querySelector(".ans").textContent = text; }
+  stream.appendChild(d); stream.scrollTop = stream.scrollHeight;
   return d;
 }
 
 async function ask(){
-  const q = $("#q").value.trim(); if(!q) return;
-  $("#q").value=""; $("#send").disabled=true;
-  bubble(q, "user");
-  const loading = bubble("", "bot");
-  loading.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  if(busy) return;                                  // ignore until current reply is back
+  const input = $("#q"), btn = $("#send");
+  const q = input.value.trim(); if(!q) return;
 
-  const fd = new FormData(); fd.append("question", q); fd.append("doc_id", scope.value);
+  busy = true;
+  input.value=""; btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+  bubble(q, "user");
+  const b = bubble("", "bot");
+  b.querySelector(".ans").innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+
+  const fd = new FormData();
+  fd.append("question", q);
+  fd.append("doc_id", scope.value);
+  fd.append("history", JSON.stringify(history.slice(-8)));
   try{
     const res = await (await fetch("/chat", {method:"POST", body:fd})).json();
-    loading.textContent = res.answer || res.detail || "No answer.";
+    const answer = res.answer || res.detail || "No answer.";
+    b.querySelector(".ans").textContent = answer;
     if(res.citations?.length){
       const c = document.createElement("div"); c.className="cites";
-      c.innerHTML = res.citations.map(x=>`<span class="cite">${x.doc} ${x.page}</span>`).join("");
-      loading.appendChild(c);
+      c.innerHTML = '<span class="lbl">Source</span>' +
+        res.citations.map(x=>`<span class="cite">§ <b>${x.doc}</b> ${x.page}</span>`).join("");
+      b.appendChild(c);
     }
-  }catch(e){ loading.textContent = "Error contacting server."; }
-  $("#send").disabled=false; msgs.scrollTop = msgs.scrollHeight;
+    history.push({role:"user", content:q}, {role:"assistant", content:answer});
+  }catch(e){ b.querySelector(".ans").textContent = "Couldn't reach the server. Try again."; }
+  finally{
+    busy = false;
+    btn.disabled=false; btn.textContent="Ask";
+    input.focus(); stream.scrollTop = stream.scrollHeight;
+  }
 }
 
 $("#send").onclick = ask;
 $("#q").addEventListener("keydown", e=>{ if(e.key==="Enter") ask(); });
-document.addEventListener("click", e=>{ if(e.target.classList.contains("ex")){ $("#q").value=e.target.textContent; ask(); }});
+document.addEventListener("click", e=>{
+  const ex = e.target.closest(".ex");
+  if(ex){ $("#q").value = ex.textContent.replace(/^Q\d/,'').trim(); ask(); }
+});
 loadDocs();
 </script>
 </body>
