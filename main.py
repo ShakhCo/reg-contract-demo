@@ -8,6 +8,7 @@ import io
 import json
 import uuid
 import pickle
+from datetime import datetime, timezone
 
 import numpy as np
 import faiss
@@ -191,7 +192,9 @@ async def chat(question: str = Form(...), doc_id: str = Form(""), history: str =
     user = (f"Documents currently loaded: {loaded}\n\n"
             f"Relevant excerpts for this question:\n{context}\n\nUser message: {q}")
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
+    system = f"{SYSTEM_PROMPT}\n\nFor reference, today's date is {today}."
+    messages = [{"role": "system", "content": system}]
     messages += prior
     messages.append({"role": "user", "content": user})
 
