@@ -1,0 +1,15 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Local data (vector index, uploaded docs)
+data/*.faiss
+data/*.pkl
+
+# Logs
+*.log
+
+# Secrets / env
+.env
+*.key
